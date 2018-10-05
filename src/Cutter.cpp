@@ -56,15 +56,15 @@ CutterCore::CutterCore(QObject *parent) :
 #if defined(APPIMAGE) || defined(MACOS_R2_BUNDLED)
     auto prefix = QDir(QCoreApplication::applicationDirPath());
 #ifdef APPIMAGE
-        // Executable is in appdir/bin
-        prefix.cdUp();
-        qInfo() << "Setting r2 prefix =" << prefix.absolutePath() << " for AppImage.";
+    // Executable is in appdir/bin
+    prefix.cdUp();
+    qInfo() << "Setting r2 prefix =" << prefix.absolutePath() << " for AppImage.";
 #else // MACOS_R2_BUNDLED
-        // Executable is in Contents/MacOS, prefix is Contents/Resources/r2
-        prefix.cdUp();
-        prefix.cd("Resources");
-        prefix.cd("r2");
-        qInfo() << "Setting r2 prefix =" << prefix.absolutePath() << " for macOS Application Bundle.";
+    // Executable is in Contents/MacOS, prefix is Contents/Resources/r2
+    prefix.cdUp();
+    prefix.cd("Resources");
+    prefix.cd("r2");
+    qInfo() << "Setting r2 prefix =" << prefix.absolutePath() << " for macOS Application Bundle.";
 #endif
     setConfig("dir.prefix", prefix.absolutePath());
 #endif
@@ -289,7 +289,7 @@ bool CutterCore::loadFile(QString path, ut64 baddr, ut64 mapaddr, int perms, int
         r_core_cmd0 (core_, "s entry0");
     }
 
-    if (perms & R_IO_WRITE) {
+    if (perms & R_PERM_W) {
         r_core_cmd0 (core_, "omfg+w");
     }
 
@@ -302,8 +302,8 @@ bool CutterCore::tryFile(QString path, bool rw)
 {
     CORE_LOCK();
     RCoreFile *cf;
-    int flags = R_IO_READ;
-    if (rw) flags |= R_IO_WRITE;
+    int flags = R_PERM_R;
+    if (rw) flags = R_PERM_RW;
     cf = r_core_file_open(this->core_, path.toUtf8().constData(), flags, 0LL);
     if (!cf) {
         return false;
@@ -371,6 +371,16 @@ void CutterCore::delFlag(const QString &name)
 {
     cmdRaw("f-" + name);
     emit flagsChanged();
+}
+
+QString CutterCore::getInstructionBytes(RVA addr)
+{
+    return cmdj("aoj @ " + RAddressString(addr)).array().first().toObject()["bytes"].toString();
+}
+
+QString CutterCore::getInstructionOpcode(RVA addr)
+{
+    return cmdj("aoj @ " + RAddressString(addr)).array().first().toObject()["opcode"].toString();
 }
 
 void CutterCore::editInstruction(RVA addr, const QString &inst)
@@ -874,9 +884,7 @@ void CutterCore::startDebug()
     if (!currentlyDebugging) {
         offsetPriorDebugging = getOffset();
     }
-    // FIXME: we do a 'ds' here since otherwise the continue until commands
-    // sometimes do not work in r2.
-    cmd("ood; ds");
+    cmd("ood");
     emit registersChanged();
     if (!currentlyDebugging) {
         setConfig("asm.flags", false);
@@ -924,6 +932,8 @@ void CutterCore::attachDebug(int pid)
         // prevent register flags from appearing during debug/emul
         setConfig("asm.flags", false);
         currentlyDebugging = true;
+        currentlyOpenFile = getConfig("file.path");
+        currentlyAttachedToPID = pid;
         emit flagsChanged();
         emit changeDebugView();
     }
@@ -935,9 +945,11 @@ void CutterCore::stopDebug()
         if (currentlyEmulating) {
             cmd("aeim-; aei-; wcr; .ar-");
             currentlyEmulating = false;
+        } else if (currentlyAttachedToPID != -1) {
+            cmd(QString("dp- %1; o %2; .ar-").arg(QString::number(currentlyAttachedToPID), currentlyOpenFile));
+            currentlyAttachedToPID = -1;
         } else {
-            // we do a ds since otherwise the process does not die.
-            cmd("dk 9; ds; oo; .ar-");
+            cmd("dk 9; oo; .ar-");
         }
         seek(offsetPriorDebugging);
         setConfig("asm.flags", true);
@@ -951,7 +963,11 @@ void CutterCore::stopDebug()
 void CutterCore::continueDebug()
 {
     if (currentlyDebugging) {
-        cmd("dc");
+        if (currentlyEmulating) {
+            cmdEsil("aec");
+        } else {
+            cmd("dc");
+        }
         emit registersChanged();
         emit refreshCodeViews();
     }
@@ -960,10 +976,10 @@ void CutterCore::continueDebug()
 void CutterCore::continueUntilDebug(QString offset)
 {
     if (currentlyDebugging) {
-        if (!currentlyEmulating) {
-            cmd("dcu " + offset);
-        } else {
+        if (currentlyEmulating) {
             cmdEsil("aecu " + offset);
+        } else {
+            cmd("dcu " + offset);
         }
         emit registersChanged();
         emit refreshCodeViews();
@@ -1012,6 +1028,16 @@ void CutterCore::stepOverDebug()
 {
     if (currentlyDebugging) {
         cmdEsil("dso");
+        QString programCounterValue = cmd("dr?`drn PC`").trimmed();
+        seek(programCounterValue);
+        emit registersChanged();
+    }
+}
+
+void CutterCore::stepOutDebug()
+{
+    if (currentlyDebugging) {
+        cmd("dsf");
         QString programCounterValue = cmd("dr?`drn PC`").trimmed();
         seek(programCounterValue);
         emit registersChanged();
@@ -1111,8 +1137,7 @@ QList<RVA> CutterCore::getBreakpointsAddresses()
     QList<BreakpointDescription> bps = getBreakpoints();
     BreakpointDescription bp;
     QList<RVA> bpAddresses;
-    foreach (bp, bps)
-    {
+    foreach (bp, bps) {
         bpAddresses << bp.addr;
     }
 
@@ -1219,6 +1244,16 @@ QString CutterCore::getSimpleGraph(QString function)
     return dot;
 }
 
+void CutterCore::setGraphEmpty(bool empty)
+{
+    emptyGraph = empty;
+}
+
+bool CutterCore::isGraphEmpty()
+{
+    return emptyGraph;
+}
+
 void CutterCore::getOpcodes()
 {
     QString opcodes = cmd("?O");
@@ -1243,7 +1278,6 @@ void CutterCore::setSettings()
     setConfig("anal.hasnext", false);
     setConfig("asm.lines.call", false);
     setConfig("anal.autoname", true);
-    setConfig("anal.jmptbl", false);
 
     setConfig("cfg.fortunes.tts", false);
 
@@ -2111,7 +2145,10 @@ QList<DisassemblyLine> CutterCore::disassembleLines(RVA offset, int lines)
 
 void CutterCore::loadScript(const QString &scriptname)
 {
+    r_core_task_sync_begin(core_);
     r_core_cmd_file(core_, scriptname.toUtf8().constData());
+    r_core_task_sync_end(core_);
+    triggerRefreshAll();
 }
 
 QString CutterCore::getVersionInformation()

@@ -5,6 +5,7 @@
 #include "dialogs/FlagDialog.h"
 #include "dialogs/RenameDialog.h"
 #include "dialogs/XrefsDialog.h"
+#include "dialogs/SetFunctionVarTypes.h"
 #include "dialogs/SetToDataDialog.h"
 #include <QtCore>
 #include <QShortcut>
@@ -41,16 +42,23 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent)
                SLOT(on_actionRenameUsedHere_triggered()), getRenameUsedHereSequence());
     addAction(&actionRenameUsedHere);
 
+    initAction(&actionSetFunctionVarTypes, tr("Re-type function local vars"),
+               SLOT(on_actionSetFunctionVarTypes_triggered()), getRetypeSequence());
+    addAction(&actionSetFunctionVarTypes);
+
     initAction(&actionDeleteComment, tr("Delete comment"), SLOT(on_actionDeleteComment_triggered()));
     addAction(&actionDeleteComment);
 
     initAction(&actionDeleteFlag, tr("Delete flag"), SLOT(on_actionDeleteFlag_triggered()));
     addAction(&actionDeleteFlag);
 
-    initAction(&actionDeleteFunction, tr("Undefine function"), SLOT(on_actionDeleteFunction_triggered()));
+    initAction(&actionDeleteFunction, tr("Undefine function"),
+               SLOT(on_actionDeleteFunction_triggered()));
     addAction(&actionDeleteFunction);
 
-    addAnalyzeMenu();
+    initAction(&actionAnalyzeFunction, tr("Define function here..."),
+               SLOT(on_actionAnalyzeFunction_triggered()));
+    addAction(&actionAnalyzeFunction);
 
     addSetBaseMenu();
 
@@ -88,16 +96,6 @@ DisassemblyContextMenu::~DisassemblyContextMenu()
     for (QAction *action : anonymousActions) {
         delete action;
     }
-}
-
-void DisassemblyContextMenu::addAnalyzeMenu()
-{
-    analyzeMenu = addMenu(tr("Analyze..."));
-
-    initAction(&actionAnalyzeFunction, tr("Create Function"));
-    analyzeMenu->addAction(&actionAnalyzeFunction);
-    connect(&actionAnalyzeFunction, &QAction::triggered, this,
-            &DisassemblyContextMenu::on_actionAnalyzeFunction_triggered);
 }
 
 void DisassemblyContextMenu::addSetBaseMenu()
@@ -253,6 +251,7 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
     RCore *core = Core()->core();
     RAnalFunction *fcn = r_anal_get_fcn_at (core->anal, offset, R_ANAL_FCN_TYPE_NULL);
+    RAnalFunction *in_fcn = Core()->functionAt(offset);
     RFlagItem *f = r_flag_get_i (core->flags, offset);
 
     actionDeleteFlag.setVisible(f ? true : false);
@@ -267,6 +266,16 @@ void DisassemblyContextMenu::aboutToShowSlot()
         actionRename.setText(tr("Rename flag \"%1\"").arg(f->name));
     } else {
         actionRename.setVisible(false);
+    }
+
+    //only show retype for local vars if in a function
+    if(in_fcn)
+    {
+        actionSetFunctionVarTypes.setVisible(true);
+    }
+    else
+    {
+        actionSetFunctionVarTypes.setVisible(false);
     }
 
 
@@ -290,9 +299,6 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
     // only show debug options if we are currently debugging
     debugMenu->menuAction()->setVisible(Core()->currentlyDebugging);
-    // currently there are is no breakpoint support in ESIL so
-    // we dont show the option in case we are emulating
-    actionAddBreakpoint.setVisible(!Core()->currentlyEmulating);
     QString progCounterName = Core()->getRegisterName("PC");
     actionSetPC.setText("Set " + progCounterName + " here");
 
@@ -338,6 +344,11 @@ QKeySequence DisassemblyContextMenu::getRenameUsedHereSequence() const
     return {Qt::SHIFT + Qt::Key_N};
 }
 
+QKeySequence DisassemblyContextMenu::getRetypeSequence() const
+{
+     return {Qt::Key_Y};
+}
+
 QKeySequence DisassemblyContextMenu::getXRefSequence() const
 {
     return {Qt::Key_X};
@@ -355,24 +366,38 @@ QList<QKeySequence> DisassemblyContextMenu::getAddBPSequence() const
 
 void DisassemblyContextMenu::on_actionEditInstruction_triggered()
 {
-    EditInstructionDialog *e = new EditInstructionDialog(this);
+    EditInstructionDialog *e = new EditInstructionDialog(this, false);
     e->setWindowTitle(tr("Edit Instruction at %1").arg(RAddressString(offset)));
 
-    QString oldInstruction = Core()->cmdj("aoj").array().first().toObject()["opcode"].toString();
-    e->setInstruction(oldInstruction);
+    QString oldInstructionOpcode = Core()->getInstructionOpcode(offset);
+    QString oldInstructionBytes = Core()->getInstructionBytes(offset);
 
-    if (e->exec())
-    {
-        QString instruction = e->getInstruction();
-        if (instruction != oldInstruction) {
-            Core()->editInstruction(offset, instruction);
+    e->setInstruction(oldInstructionOpcode);
+
+    if (e->exec()) {
+        QString userInstructionOpcode = e->getInstruction();
+        if (userInstructionOpcode != oldInstructionOpcode) {
+            Core()->editInstruction(offset, userInstructionOpcode);
+
+            // check if the write failed
+            auto newInstructionBytes = Core()->getInstructionBytes(offset);
+            if (newInstructionBytes == oldInstructionBytes) {
+                writeFailed();
+            }
         }
     }
 }
 
 void DisassemblyContextMenu::on_actionNopInstruction_triggered()
 {
+    QString oldBytes = Core()->getInstructionBytes(offset);
+
     Core()->nopInstruction(offset);
+
+    QString newBytes = Core()->getInstructionBytes(offset);
+    if (oldBytes == newBytes) {
+        writeFailed();
+    }
 }
 
 void DisassemblyContextMenu::showReverseJmpQuery()
@@ -394,23 +419,52 @@ void DisassemblyContextMenu::showReverseJmpQuery()
 
 void DisassemblyContextMenu::on_actionJmpReverse_triggered()
 {
+    QString oldBytes = Core()->getInstructionBytes(offset);
+
     Core()->jmpReverse(offset);
+
+    QString newBytes = Core()->getInstructionBytes(offset);
+    if (oldBytes == newBytes) {
+        writeFailed();
+    }
 }
 
 void DisassemblyContextMenu::on_actionEditBytes_triggered()
 {
-    EditInstructionDialog *e = new EditInstructionDialog(this);
+    EditInstructionDialog *e = new EditInstructionDialog(this, true);
     e->setWindowTitle(tr("Edit Bytes at %1").arg(RAddressString(offset)));
 
-    QString oldBytes = Core()->cmdj("aoj").array().first().toObject()["bytes"].toString();
+    QString oldBytes = Core()->getInstructionBytes(offset);
     e->setInstruction(oldBytes);
 
-    if (e->exec())
-    {
+    if (e->exec()) {
         QString bytes = e->getInstruction();
         if (bytes != oldBytes) {
             Core()->editBytes(offset, bytes);
+
+            QString newBytes = Core()->getInstructionBytes(offset);
+            if (oldBytes == newBytes) {
+                writeFailed();
+            }
         }
+    }
+}
+
+void DisassemblyContextMenu::writeFailed()
+{
+    QMessageBox msgBox;
+    msgBox.setIcon(QMessageBox::Icon::Critical);
+    msgBox.setWindowTitle(tr("Write error"));
+    msgBox.setText(tr("Unable to complete write operation. Consider opening in write mode."));
+    msgBox.addButton(tr("OK"), QMessageBox::NoRole);
+    QAbstractButton *reopenButton = msgBox.addButton(tr("Reopen in write mode"), QMessageBox::YesRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == reopenButton) {
+        QMessageBox::warning(this, "File reopened in write mode",
+                             "WARNING: Any chages will now be commited to disk");
+        Core()->cmd("oo+");
     }
 }
 
@@ -469,7 +523,7 @@ void DisassemblyContextMenu::on_actionAnalyzeFunction_triggered()
 {
     RenameDialog *dialog = new RenameDialog(this);
     dialog->setWindowTitle(tr("Analyze function at %1").arg(RAddressString(offset)));
-    dialog->setPlaceholderText(tr("Auto"));
+    dialog->setPlaceholderText(tr("Function name"));
     if (dialog->exec()) {
         QString function_name = dialog->getName();
         Core()->createFunctionAt(offset, function_name);
@@ -549,6 +603,25 @@ void DisassemblyContextMenu::on_actionRenameUsedHere_triggered()
             }
         }
     }
+}
+
+void DisassemblyContextMenu::on_actionSetFunctionVarTypes_triggered()
+{
+    SetFunctionVarTypes *dialog;
+
+
+    RAnalFunction *fcn = Core()->functionAt(offset);
+
+    dialog = new SetFunctionVarTypes(this);
+
+    if(fcn)
+    {
+        dialog->setWindowTitle(tr("Set Variable Types for Function: %1").arg(fcn->name));
+    }
+    dialog->setFcn(fcn);
+
+    dialog->exec();
+
 }
 
 void DisassemblyContextMenu::on_actionXRefs_triggered()

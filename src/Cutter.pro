@@ -24,7 +24,7 @@ CONFIG += c++11
 !defined(CUTTER_ENABLE_JUPYTER, var)        CUTTER_ENABLE_JUPYTER=true
 equals(CUTTER_ENABLE_JUPYTER, true)         CONFIG += CUTTER_ENABLE_JUPYTER
 
-!defined(CUTTER_ENABLE_QTWEBENGINE, var)    CUTTER_ENABLE_QTWEBENGINE=true
+!defined(CUTTER_ENABLE_QTWEBENGINE, var)    CUTTER_ENABLE_QTWEBENGINE=false
 equals(CUTTER_ENABLE_JUPYTER, true) {
     equals(CUTTER_ENABLE_QTWEBENGINE, true)  CONFIG += CUTTER_ENABLE_QTWEBENGINE
 }
@@ -60,7 +60,9 @@ win32 {
 
 macx {
     QMAKE_CXXFLAGS = -mmacosx-version-min=10.7 -std=gnu0x -stdlib=libc++
-    QMAKE_INFO_PLIST = apple/Info.plist
+    QMAKE_TARGET_BUNDLE_PREFIX = org.radare
+    QMAKE_BUNDLE = cutter
+    QMAKE_INFO_PLIST = macos/Info.plist
 }
 
 unix:exists(/usr/local/include/libr) {
@@ -192,7 +194,8 @@ SOURCES += \
     dialogs/BreakpointsDialog.cpp \
     dialogs/AttachProcDialog.cpp \
     widgets/RegisterRefsWidget.cpp \
-    dialogs/SetToDataDialog.cpp
+    dialogs/SetToDataDialog.cpp \
+    dialogs/SetFunctionVarTypes.cpp
 
 HEADERS  += \
     Cutter.h \
@@ -287,7 +290,8 @@ HEADERS  += \
     dialogs/AttachProcDialog.h \
     widgets/RegisterRefsWidget.h \
     dialogs/SetToDataDialog.h \
-    utils/InitialOptions.h
+    utils/InitialOptions.h \
+    dialogs/SetFunctionVarTypes.h
 
 FORMS    += \
     dialogs/AboutDialog.ui \
@@ -341,7 +345,8 @@ FORMS    += \
     dialogs/BreakpointsDialog.ui \
     dialogs/AttachProcDialog.ui \
     widgets/RegisterRefsWidget.ui \
-    dialogs/SetToDataDialog.ui
+    dialogs/SetToDataDialog.ui \
+    dialogs/SetFunctionVarTypes.ui
 
 RESOURCES += \
     resources.qrc \

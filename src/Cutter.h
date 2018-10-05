@@ -407,6 +407,8 @@ public:
     void triggerFlagsChanged();
 
     /* Edition functions */
+    QString getInstructionBytes(RVA addr);
+    QString getInstructionOpcode(RVA addr);
     void editInstruction(RVA addr, const QString &inst);
     void nopInstruction(RVA addr);
     void jmpReverse(RVA addr);
@@ -425,7 +427,7 @@ public:
     void setCurrentBits(int bits, RVA offset = RVA_INVALID);
 
     /* File related methods */
-    bool loadFile(QString path, ut64 baddr = 0LL, ut64 mapaddr = 0LL, int perms = R_IO_READ,
+    bool loadFile(QString path, ut64 baddr = 0LL, ut64 mapaddr = 0LL, int perms = R_PERM_R,
                   int va = 0, bool loadbin = false, const QString &forceBinPlugin = nullptr);
     bool tryFile(QString path, bool rw);
     void openFile(QString path, RVA mapaddr);
@@ -512,6 +514,7 @@ public:
     void continueUntilDebug(QString offset);
     void stepDebug();
     void stepOverDebug();
+    void stepOutDebug();
     void toggleBreakpoint(RVA addr);
     void toggleBreakpoint(QString addr);
     void delBreakpoint(RVA addr);
@@ -525,6 +528,8 @@ public:
     void setDebugPlugin(QString plugin);
     bool currentlyDebugging = false;
     bool currentlyEmulating = false;
+    int currentlyAttachedToPID = -1;
+    QString currentlyOpenFile;
 
     QString getDecompiledCodePDC(RVA addr);
     bool getR2DecAvailable();
@@ -536,6 +541,8 @@ public:
     QJsonDocument getFileVersionInfo();
     QStringList getStats();
     QString getSimpleGraph(QString function);
+    void setGraphEmpty(bool empty);
+    bool isGraphEmpty();
 
     void getOpcodes();
     QList<QString> opcodes;
@@ -658,6 +665,8 @@ private:
     AsyncTaskManager *asyncTaskManager;
     RVA offsetPriorDebugging = RVA_INVALID;
     QErrorMessage msgBox;
+
+    bool emptyGraph = false;
 
     QList<CutterPlugin*> plugins;
 };

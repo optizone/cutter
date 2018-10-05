@@ -138,9 +138,10 @@ void MainWindow::initUI()
     ui->menuDebug->addSeparator();
     ui->menuDebug->addAction(debugToolbar->actionStep);
     ui->menuDebug->addAction(debugToolbar->actionStepOver);
+    ui->menuDebug->addAction(debugToolbar->actionStepOut);
     ui->menuDebug->addSeparator();
-    // ui->menuDebug->addAction(debugToolbar->actionContinue);
-    // ui->menuDebug->addAction(debugToolbar->actionContinueUntilCall);
+    ui->menuDebug->addAction(debugToolbar->actionContinue);
+    ui->menuDebug->addAction(debugToolbar->actionContinueUntilCall);
     ui->menuDebug->addAction(debugToolbar->actionContinueUntilSyscall);
 
     // Sepparator between undo/redo and goto lineEdit
@@ -430,7 +431,7 @@ void MainWindow::setFilename(const QString &fn)
 {
     // Add file name to window title
     this->filename = fn;
-    this->setWindowTitle(APPNAME" - " + fn);
+    this->setWindowTitle(APPNAME" – " + fn);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -625,44 +626,19 @@ void MainWindow::updateDockActionsChecked()
     }
 }
 
-void MainWindow::showDefaultDocks()
-{
-    const QList<QDockWidget *> defaultDocks = { sectionsDock,
-                                                entrypointDock,
-                                                functionsDock,
-                                                commentsDock,
-                                                stringsDock,
-                                                consoleDock,
-                                                importsDock,
-                                                symbolsDock,
-                                                graphDock,
-                                                disassemblyDock,
-                                                sidebarDock,
-                                                hexdumpDock,
-                                                pseudocodeDock,
-                                                dashboardDock,
-#ifdef CUTTER_ENABLE_JUPYTER
-                                                jupyterDock
-#endif
-                                              };
-
-    for (auto w : dockWidgets) {
-        if (defaultDocks.contains(w)) {
-            w->show();
-        }
-    }
-
-    updateDockActionsChecked();
-}
-
 void MainWindow::showZenDocks()
 {
     const QList<QDockWidget *> zenDocks = { functionsDock,
+                                            dashboardDock,
                                             stringsDock,
                                             graphDock,
                                             disassemblyDock,
                                             hexdumpDock,
-                                            searchDock
+                                            searchDock,
+                                            importsDock,
+#ifdef CUTTER_ENABLE_JUPYTER
+                                            jupyterDock
+#endif
                                           };
     for (auto w : dockWidgets) {
         if (zenDocks.contains(w)) {
@@ -698,35 +674,13 @@ void MainWindow::resetToDefaultLayout()
 {
     hideAllDocks();
     restoreDocks();
-    showDefaultDocks();
+    showZenDocks();
     dashboardDock->raise();
 
-    // ugly workaround to set the default widths of functions and sidebar docks
-    // if anyone finds a way to do this cleaner that also works, feel free to change it!
-    auto restoreFunctionDock = qhelpers::forceWidth(functionsDock->widget(), 300);
-    auto restoreSidebarDock = qhelpers::forceWidth(sidebarDock->widget(), 300);
-
-    qApp->processEvents();
-
-    restoreFunctionDock.restoreWidth(functionsDock->widget());
-    restoreSidebarDock.restoreWidth(sidebarDock->widget());
-
-    core->setMemoryWidgetPriority(CutterCore::MemoryWidgetType::Disassembly);
-}
-
-void MainWindow::resetToZenLayout()
-{
-    hideAllDocks();
-    restoreDocks();
-    showZenDocks();
-    disassemblyDock->raise();
-
-    // ugly workaround to set the default widths of functions
+    // Ugly workaround to set the default widths of functions docks
     // if anyone finds a way to do this cleaner that also works, feel free to change it!
     auto restoreFunctionDock = qhelpers::forceWidth(functionsDock->widget(), 200);
-
     qApp->processEvents();
-
     restoreFunctionDock.restoreWidth(functionsDock->widget());
 
     core->setMemoryWidgetPriority(CutterCore::MemoryWidgetType::Disassembly);
@@ -780,11 +734,6 @@ void MainWindow::on_actionFunctionsRename_triggered()
 void MainWindow::on_actionDefault_triggered()
 {
     resetToDefaultLayout();
-}
-
-void MainWindow::on_actionZen_triggered()
-{
-    resetToZenLayout();
 }
 
 /**

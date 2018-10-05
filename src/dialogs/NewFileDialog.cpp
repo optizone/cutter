@@ -251,7 +251,7 @@ void NewFileDialog::dropEvent(QDropEvent *event)
     }
 
     event->acceptProposedAction();
-    loadFile(event->mimeData()->urls().first().path());
+    loadFile(event->mimeData()->urls().first().toLocalFile());
 }
 
 bool NewFileDialog::fillRecentFilesList()
@@ -329,6 +329,10 @@ void NewFileDialog::fillIOPluginsList()
     int index = 1;
     QList<RIOPluginDescription> ioPlugins = Core()->getRIOPluginDescriptions();
     for (RIOPluginDescription plugin : ioPlugins) {
+        // Hide debug plugins
+        if (plugin.permissions.contains('d')) {
+            continue;
+        }
         ui->ioPlugin->addItem(plugin.name);
         ui->ioPlugin->setItemData(index, plugin.description, Qt::ToolTipRole);
         index++;
@@ -337,7 +341,8 @@ void NewFileDialog::fillIOPluginsList()
 
 void NewFileDialog::loadFile(const QString &filename)
 {
-    if (ui->ioPlugin->currentIndex() == 0 && !Core()->tryFile(filename, false) && !ui->checkBox_FilelessOpen->isChecked()) {
+    if (ui->ioPlugin->currentIndex() == 0 && !Core()->tryFile(filename, false)
+            && !ui->checkBox_FilelessOpen->isChecked()) {
         QMessageBox msgBox(this);
         msgBox.setText(tr("Select a new program or a previous one before continuing."));
         msgBox.exec();
@@ -364,7 +369,7 @@ void NewFileDialog::loadFile(const QString &filename)
     InitialOptions options;
     options.filename = ioFile;
     main->openNewFile(options);
-    
+
     close();
 }
 

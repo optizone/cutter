@@ -51,8 +51,8 @@ VisualNavbar::VisualNavbar(MainWindow *main, QWidget *parent) :
     graphicsScene->setBackgroundBrush(bg);
 
     this->graphicsView->setAlignment(Qt::AlignLeft);
-    this->graphicsView->setMinimumHeight(20);
-    this->graphicsView->setMaximumHeight(20);
+    this->graphicsView->setMinimumHeight(15);
+    this->graphicsView->setMaximumHeight(15);
     this->graphicsView->setFrameShape(QFrame::NoFrame);
     this->graphicsView->setRenderHints(0);
     this->graphicsView->setScene(graphicsScene);
@@ -86,7 +86,7 @@ void VisualNavbar::paintEvent(QPaintEvent *event)
     if (statsWidth < w) {
         statsWidth = nextPow2(w);
         fetch = true;
-    } else if (statsWidth > w*4) {
+    } else if (statsWidth > w * 4) {
         statsWidth = statsWidth > 0 ? statsWidth / 2 : 0;
         fetch = true;
     }
@@ -110,7 +110,7 @@ void VisualNavbar::fetchStats()
     stats = Core()->getBlockStatistics(statsWidth);
 }
 
-enum class DataType: int { Empty, Code, String, Symbol, Count };
+enum class DataType : int { Empty, Code, String, Symbol, Count };
 
 void VisualNavbar::updateGraphicsScene()
 {

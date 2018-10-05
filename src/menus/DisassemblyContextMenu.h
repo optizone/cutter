@@ -26,8 +26,9 @@ private slots:
     void on_actionEditInstruction_triggered();
     void on_actionNopInstruction_triggered();
     void on_actionJmpReverse_triggered();
-    void showReverseJmpQuery();
     void on_actionEditBytes_triggered();
+    void showReverseJmpQuery();
+    void writeFailed();
 
     void on_actionCopy_triggered();
     void on_actionCopyAddr_triggered();
@@ -36,6 +37,7 @@ private slots:
     void on_actionAddFlag_triggered();
     void on_actionRename_triggered();
     void on_actionRenameUsedHere_triggered();
+    void on_actionSetFunctionVarTypes_triggered();
     void on_actionXRefs_triggered();
     void on_actionDisplayOptions_triggered();
 
@@ -60,6 +62,7 @@ private:
     QKeySequence getAddFlagSequence() const;
     QKeySequence getRenameSequence() const;
     QKeySequence getRenameUsedHereSequence() const;
+    QKeySequence getRetypeSequence() const;
     QKeySequence getXRefSequence() const;
     QKeySequence getDisplayOptionsSequence() const;
     QList<QKeySequence> getAddBPSequence() const;
@@ -82,10 +85,10 @@ private:
 
     QAction actionAddComment;
     QAction actionAddFlag;
-    QMenu *analyzeMenu;
     QAction actionAnalyzeFunction;
     QAction actionRename;
     QAction actionRenameUsedHere;
+    QAction actionSetFunctionVarTypes;
     QAction actionXRefs;
     QAction actionDisplayOptions;
 
@@ -133,7 +136,6 @@ private:
     void setToData(int size, int repeat = 1);
     void setBits(int bits);
 
-    void addAnalyzeMenu();
     void addSetBaseMenu();
     void addSetBitsMenu();
     void addSetToDataMenu();

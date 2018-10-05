@@ -125,7 +125,9 @@ DisassemblyWidget::DisassemblyWidget(MainWindow *main, QAction *action)
     connect(Config(), SIGNAL(colorsUpdated()), this, SLOT(colorsUpdatedSlot()));
 
     connect(this, &QDockWidget::visibilityChanged, this, [](bool visibility) {
-        if (visibility) {
+        bool emptyGraph = (Core()->getMemoryWidgetPriority() == CutterCore::MemoryWidgetType::Graph
+                           && Core()->isGraphEmpty());
+        if (visibility && !emptyGraph) {
             Core()->setMemoryWidgetPriority(CutterCore::MemoryWidgetType::Disassembly);
         }
     });
@@ -231,7 +233,7 @@ void DisassemblyWidget::refreshDisasm(RVA offset)
             break;
         }
         cursor.insertHtml(line.text);
-        if(Core()->isBreakpoint(breakpoints, line.offset)) {
+        if (Core()->isBreakpoint(breakpoints, line.offset)) {
             QTextBlockFormat f;
             f.setBackground(ConfigColor("gui.breakpoint_background"));
             cursor.setBlockFormat(f);
@@ -304,12 +306,14 @@ bool DisassemblyWidget::updateMaxLines()
     return false;
 }
 
-void DisassemblyWidget::zoomIn() {
+void DisassemblyWidget::zoomIn()
+{
     mDisasTextEdit->zoomIn();
     updateMaxLines();
 }
 
-void DisassemblyWidget::zoomOut() {
+void DisassemblyWidget::zoomOut()
+{
     mDisasTextEdit->zoomOut();
     updateMaxLines();
 }
@@ -542,7 +546,7 @@ void DisassemblyWidget::moveCursorRelative(bool up, bool page)
                 int overflowLines = oldTopLine - maxLines;
                 if (overflowLines > 0) {
                     while (lines[overflowLines - 1].offset == lines[overflowLines].offset
-                        && overflowLines < lines.length() - 1) {
+                            && overflowLines < lines.length() - 1) {
                         overflowLines++;
                     }
                     offset = lines[overflowLines].offset;
@@ -623,7 +627,8 @@ void DisassemblyWidget::on_seekChanged(RVA offset)
 
 void DisassemblyWidget::raisePrioritizedMemoryWidget(CutterCore::MemoryWidgetType type)
 {
-    if (type == CutterCore::MemoryWidgetType::Disassembly) {
+    bool emptyGraph = (type == CutterCore::MemoryWidgetType::Graph && Core()->isGraphEmpty());
+    if (type == CutterCore::MemoryWidgetType::Disassembly || emptyGraph) {
         raise();
         setFocus();
     }
